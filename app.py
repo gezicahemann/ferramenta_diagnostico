@@ -2,21 +2,17 @@ import streamlit as st
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import spacy
-import os
-
-# Carregar modelo de NLP
-nlp = spacy.load("pt_core_news_sm")
+import re
 
 # Carregar base de dados
-caminho_csv = "base_normas_com_recomendacoes_consultas.csv"
-df = pd.read_csv(caminho_csv)
+df = pd.read_csv("base_normas_com_recomendacoes_consultas.csv")
 
-# Pré-processamento
+# Pré-processamento leve, sem spaCy
 def preprocessar(texto):
-    doc = nlp(str(texto).lower())
-    tokens = [token.lemma_ for token in doc if not token.is_stop and not token.is_punct and not token.is_space]
-    return " ".join(tokens)
+    texto = str(texto).lower()
+    texto = re.sub(r"[^\w\s]", "", texto)
+    palavras = texto.split()
+    return " ".join([p for p in palavras if len(p) > 2])  # remove palavras curtas
 
 df["trecho_processado"] = df["trecho"].apply(preprocessar)
 
@@ -29,52 +25,26 @@ if df["trecho_processado"].dropna().empty:
 vetorizador = TfidfVectorizer()
 matriz_tfidf = vetorizador.fit_transform(df["trecho_processado"])
 
-# Estilo da página
-st.set_page_config(page_title="Diagnóstico por Patologia", layout="centered", initial_sidebar_state="collapsed")
+# Layout
+st.set_page_config(page_title="Diagnóstico por Patologia", layout="centered")
 
 custom_css = """
 <style>
-    body {
-        background-color: #121212;
-        color: #f0f0f0;
-    }
-    .titulo {
-        text-align: center;
-        font-size: 2.2em;
-        font-weight: bold;
-        margin-bottom: 0.3em;
-        color: #f0f0f0;
-    }
-    .subtitulo {
-        text-align: center;
-        font-size: 1.1em;
-        color: #c0c0c0;
-        margin-bottom: 2em;
-    }
-    .rodape {
-        margin-top: 4em;
-        text-align: center;
-        font-size: 0.9em;
-        color: #c0c0c0;
-    }
-    .stTextInput label {
-        color: #f0f0f0 !important;
-    }
+    body { background-color: #121212; color: #f0f0f0; }
+    .titulo { text-align: center; font-size: 2.2em; font-weight: bold; color: #f0f0f0; margin-top: 1em; }
+    .subtitulo { text-align: center; color: #bbb; margin-bottom: 2em; }
+    .rodape { margin-top: 3em; text-align: center; font-size: 0.9em; color: #ccc; }
+    .stTextInput label { color: #f0f0f0 !important; }
 </style>
 """
-
 st.markdown(custom_css, unsafe_allow_html=True)
 
-# Logo
-st.image("logo_engenharia.png", use_column_width="auto")
-
-# Título e subtítulo
+st.image("logo_engenharia.png", width=100)
 st.markdown('<div class="titulo">🧱 Diagnóstico por Manifestação Patológica</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitulo">Digite abaixo a manifestação observada (ex: fissura em viga, infiltração na parede, manchas em fachada...)</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitulo">Digite a manifestação observada (ex: fissura em viga, infiltração na parede...)</div>', unsafe_allow_html=True)
 
 entrada = st.text_input("Descreva o problema:")
 
-# Função de busca
 def buscar_normas(consulta):
     consulta_proc = preprocessar(consulta)
     if not consulta_proc.strip():
@@ -86,10 +56,9 @@ def buscar_normas(consulta):
     top_indices = similaridades.argsort()[::-1]
     top_resultados = df.iloc[top_indices]
     top_resultados = top_resultados[["manifestacao", "norma", "secao", "trecho", "recomendacoes", "consultas_relacionadas"]]
-    top_resultados = top_resultados[similaridades[top_indices] > 0.15]  # refinado
+    top_resultados = top_resultados[similaridades[top_indices] > 0.15]
     return top_resultados
 
-# Exibição dos resultados
 if entrada:
     resultados = buscar_normas(entrada)
     if not resultados.empty:
@@ -98,5 +67,4 @@ if entrada:
     else:
         st.warning("Nenhum resultado encontrado para essa manifestação.")
 
-# Rodapé
 st.markdown('<div class="rodape">Desenvolvido por Gézica Hemann | Engenharia Civil</div>', unsafe_allow_html=True)
