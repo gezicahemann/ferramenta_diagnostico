@@ -2,13 +2,21 @@ import streamlit as st
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import spacy
+from spacy.cli import download
+
+# Garante que o modelo será baixado no ambiente do Streamlit Cloud
+download("pt_core_news_sm")
+nlp = spacy.load("pt_core_news_sm")
 
 # Lê a base de normas
 df = pd.read_csv("base_normas_streamlit.csv")
 
 # Pré-processa os textos das normas
 def preprocessar(texto):
-    return texto.lower()
+    doc = nlp(texto.lower())
+    tokens = [token.lemma_ for token in doc if not token.is_stop and not token.is_punct]
+    return " ".join(tokens)
 
 df["trecho_processado"] = df["trecho"].apply(preprocessar)
 
@@ -34,8 +42,4 @@ entrada = st.text_input("Descreva o problema:")
 if entrada:
     resultados = buscar_normas(entrada)
     st.subheader("🔍 Resultados encontrados:")
-    for _, linha in resultados.iterrows():
-        st.markdown(f"**Manifestação:** {linha['manifestacao'].capitalize()}")
-        st.markdown(f"**Norma:** {linha['norma']} (Seção {linha['secao']})")
-        st.markdown(f"**Trecho técnico:** {linha['trecho']}")
-        st.markdown("---")
+    for _,_
