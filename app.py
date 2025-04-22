@@ -1,91 +1,82 @@
 import streamlit as st
 import pandas as pd
 import spacy
-import pt_core_news_sm
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Carregando o modelo do spaCy diretamente
-nlp = pt_core_news_sm.load()
+# Carrega modelo leve do spaCy para português
+nlp = spacy.blank("pt")
 
-# Função para pré-processar os textos
+# Função de pré-processamento
 def preprocessar(texto):
     doc = nlp(texto.lower())
-    tokens = [token.lemma_ for token in doc if not token.is_stop and not token.is_punct]
+    tokens = [token.text for token in doc if not token.is_punct and not token.is_space]
     return " ".join(tokens)
 
-# Carregar e preparar a base de dados
-@st.cache_data
-def carregar_dados():
-    df = pd.read_csv("base_normas_com_recomendacoes_consultas.csv")
-    df.dropna(subset=["trecho"], inplace=True)
-    df["trecho_processado"] = df["trecho"].astype(str).apply(preprocessar)
-    return df
+# Carrega base de dados
+df = pd.read_csv("base_normas_com_recomendacoes_consultas.csv")
 
-df = carregar_dados()
+# Preprocessa os trechos
+df["trecho_processado"] = df["trecho"].astype(str).apply(preprocessar)
 
-# Vetorização com TF-IDF
+# Remove linhas vazias após o processamento
+df = df[df["trecho_processado"].str.strip().astype(bool)]
+
+# Verifica se a base está válida
+if df.empty:
+    st.error("A base de dados está vazia após o pré-processamento. Verifique se há textos válidos na coluna 'trecho'.")
+    st.stop()
+
+# Cria matriz TF-IDF
 vetorizador = TfidfVectorizer()
 matriz_tfidf = vetorizador.fit_transform(df["trecho_processado"])
 
-# Função de busca por similaridade
-def buscar_normas(consulta):
+# Função de busca
+def buscar_normas(consulta, top_n=5):
     consulta_processada = preprocessar(consulta)
-    if not consulta_processada.strip():
-        return pd.DataFrame()
     vetor_consulta = vetorizador.transform([consulta_processada])
     similaridades = cosine_similarity(vetor_consulta, matriz_tfidf).flatten()
-    indices = similaridades.argsort()[::-1][:5]
-    resultados = df.iloc[indices][["manifestacao", "norma", "secao", "trecho", "recomendacoes", "consultas_relacionadas"]]
-    resultados["similaridade"] = similaridades[indices]
-    return resultados
+    indices_top = similaridades.argsort()[-top_n:][::-1]
+    return df.iloc[indices_top][["manifestacao", "norma", "secao", "trecho", "recomendacoes", "consultas_relacionadas"]]
 
-# Interface com modo escuro e estilo centralizado
-st.markdown(
-    """
+# Estilização da interface
+st.set_page_config(page_title="Diagnóstico Patológico", layout="centered", page_icon="🧱")
+
+# Interface escura customizada
+st.markdown("""
     <style>
         body {
-            color: #fff;
             background-color: #111;
+            color: #f1f1f1;
         }
-        .stTextInput > label {
-            color: #ccc !important;
+        .stTextInput label {
+            color: #f1f1f1;
         }
-        .stApp {
-            text-align: center;
-        }
-        .logo {
-            display: block;
-            margin-left: auto;
-            margin-right: auto;
-            width: 100px;
+        .reportview-container .main .block-container {
+            padding-top: 2rem;
         }
     </style>
-    """,
-    unsafe_allow_html=True
-)
+""", unsafe_allow_html=True)
 
-# Logo centralizada
-st.image("logo_engenharia.png", use_column_width=False, width=80)
+# Logo e título centralizados
+col1, col2, col3 = st.columns([1, 1, 1])
+with col2:
+    st.image("logo_engenharia.png", width=80)
 
-# Título e instruções
-st.markdown("## 🧱 Diagnóstico por Manifestação Patológica")
-st.markdown("Digite abaixo a manifestação observada (ex: fissura em viga, infiltração na parede, manchas em fachada...)")
+st.markdown("<h1 style='text-align: center;'>🧱 Diagnóstico por Manifestação Patológica</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center;'>Digite abaixo a manifestação observada (ex: fissura em viga, infiltração na parede, manchas em fachada...)</p>", unsafe_allow_html=True)
 
-# Entrada do usuário
+# Campo de entrada
 entrada = st.text_input("Descreva o problema:")
 
-# Resultado
+# Busca e exibição dos resultados
 if entrada:
     resultados = buscar_normas(entrada)
     if resultados.empty:
-        st.warning("Nenhum resultado encontrado. Tente descrever de outra forma.")
+        st.warning("Nenhuma correspondência encontrada.")
     else:
         st.success("Resultados encontrados:")
-        st.dataframe(resultados.drop(columns=["similaridade"]))
+        st.dataframe(resultados, use_container_width=True)
 
-# Rodapé com crédito
-st.markdown(
-    "<br><div style='text-align: center; color: #888;'>Desenvolvido por Gézica Hemann | Engenharia Civil</div>",
-    unsafe_allow_html=True
-)
+# Rodapé
+st.markdown("<p style='text-align: center; margin-top: 2rem;'>Desenvolvido por Gézica Hemann | Engenharia Civil</p>", unsafe_allow_html=True)
