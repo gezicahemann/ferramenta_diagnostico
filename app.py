@@ -2,26 +2,13 @@ import streamlit as st
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import spacy
-
-# Carrega o modelo de linguagem em português do spaCy
-import subprocess
-import importlib.util
-
-model_name = "pt_core_news_sm"
-if importlib.util.find_spec(model_name) is None:
-    subprocess.run(["python", "-m", "spacy", "download", model_name])
-
-nlp = spacy.load(model_name)
 
 # Lê a base de normas
 df = pd.read_csv("base_normas_streamlit.csv")
 
 # Pré-processa os textos das normas
 def preprocessar(texto):
-    doc = nlp(texto.lower())
-    tokens = [token.lemma_ for token in doc if not token.is_stop and not token.is_punct]
-    return " ".join(tokens)
+    return texto.lower()
 
 df["trecho_processado"] = df["trecho"].apply(preprocessar)
 
