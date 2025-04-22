@@ -1,85 +1,80 @@
 import streamlit as st
 import pandas as pd
-import spacy
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import spacy
+import os
 
-# Carregar modelo do spaCy
+# Carregar modelo de NLP
 nlp = spacy.load("pt_core_news_sm")
 
-# Função de pré-processamento
+# Carregar base de dados
+caminho_csv = "base_normas_com_recomendacoes_consultas.csv"
+df = pd.read_csv(caminho_csv)
+
+# Pré-processamento
 def preprocessar(texto):
-    doc = nlp(texto.lower())
-    tokens = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
+    doc = nlp(str(texto).lower())
+    tokens = [token.lemma_ for token in doc if not token.is_stop and not token.is_punct and not token.is_space]
     return " ".join(tokens)
 
-# Carregar a base
-df = pd.read_csv("base_normas_com_recomendacoes_consultas.csv")
+df["trecho_processado"] = df["trecho"].apply(preprocessar)
 
-# Processar os trechos
-df["trecho_processado"] = df["trecho"].astype(str).apply(preprocessar)
-
-# Remover linhas vazias
-df = df[df["trecho_processado"].str.strip() != ""]
+# Verificação de base válida
+if df["trecho_processado"].dropna().empty:
+    st.error("A base de dados está vazia após o pré-processamento. Verifique se há textos válidos no campo 'trecho'.")
+    st.stop()
 
 # Vetorização
 vetorizador = TfidfVectorizer()
 matriz_tfidf = vetorizador.fit_transform(df["trecho_processado"])
 
 # Estilo da página
-st.set_page_config(page_title="Diagnóstico por Manifestação Patológica", layout="centered")
+st.set_page_config(page_title="Diagnóstico por Patologia", layout="centered", initial_sidebar_state="collapsed")
 
-st.markdown("""
-    <style>
-        body {
-            background-color: #111111;
-            color: #f0f0f0;
-        }
-        .stTextInput>div>div>input {
-            background-color: #222;
-            color: white;
-        }
-        .stTextInput>label {
-            color: #dddddd !important;
-        }
-        .titulo-principal {
-            font-size: 2.5em;
-            font-weight: bold;
-            color: white;
-            text-align: center;
-        }
-        .subtitulo {
-            font-size: 1.1em;
-            color: #cccccc;
-            text-align: center;
-        }
-        .rodape {
-            text-align: center;
-            font-size: 0.9em;
-            color: #888888;
-            margin-top: 2rem;
-        }
-        .logo-container {
-            display: flex;
-            justify-content: center;
-            margin-bottom: -30px;
-        }
-        .logo-container img {
-            width: 80px;
-        }
-    </style>
-""", unsafe_allow_html=True)
+custom_css = """
+<style>
+    body {
+        background-color: #121212;
+        color: #f0f0f0;
+    }
+    .titulo {
+        text-align: center;
+        font-size: 2.2em;
+        font-weight: bold;
+        margin-bottom: 0.3em;
+        color: #f0f0f0;
+    }
+    .subtitulo {
+        text-align: center;
+        font-size: 1.1em;
+        color: #c0c0c0;
+        margin-bottom: 2em;
+    }
+    .rodape {
+        margin-top: 4em;
+        text-align: center;
+        font-size: 0.9em;
+        color: #c0c0c0;
+    }
+    .stTextInput label {
+        color: #f0f0f0 !important;
+    }
+</style>
+"""
 
-# Logo centralizada
-st.markdown('<div class="logo-container"><img src="logo_engenharia.png" /></div>', unsafe_allow_html=True)
+st.markdown(custom_css, unsafe_allow_html=True)
+
+# Logo
+st.image("logo_engenharia.png", use_column_width="auto")
 
 # Título e subtítulo
-st.markdown('<div class="titulo-principal">🔧 Diagnóstico por Manifestação Patológica</div>', unsafe_allow_html=True)
+st.markdown('<div class="titulo">🧱 Diagnóstico por Manifestação Patológica</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitulo">Digite abaixo a manifestação observada (ex: fissura em viga, infiltração na parede, manchas em fachada...)</div>', unsafe_allow_html=True)
 
-# Entrada do usuário
 entrada = st.text_input("Descreva o problema:")
 
+# Função de busca
 def buscar_normas(consulta):
     consulta_proc = preprocessar(consulta)
     if not consulta_proc.strip():
@@ -87,14 +82,14 @@ def buscar_normas(consulta):
 
     consulta_vec = vetorizador.transform([consulta_proc])
     similaridades = cosine_similarity(consulta_vec, matriz_tfidf).flatten()
-    
+
     top_indices = similaridades.argsort()[::-1]
     top_resultados = df.iloc[top_indices]
     top_resultados = top_resultados[["manifestacao", "norma", "secao", "trecho", "recomendacoes", "consultas_relacionadas"]]
-    top_resultados = top_resultados[similaridades[top_indices] > 0.1]  # Limite de relevância
-
+    top_resultados = top_resultados[similaridades[top_indices] > 0.15]  # refinado
     return top_resultados
 
+# Exibição dos resultados
 if entrada:
     resultados = buscar_normas(entrada)
     if not resultados.empty:
