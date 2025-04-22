@@ -1,20 +1,17 @@
 import streamlit as st
 import pandas as pd
-import spacy
+import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-
-# Carrega modelo leve do spaCy (não exige download no Streamlit Cloud)
-nlp = spacy.blank("pt")
 
 # Lê a base de normas
 df = pd.read_csv("base_normas_com_recomendacoes_consultas.csv")
 
-# Função de pré-processamento dos textos
+# Função de pré-processamento (sem spaCy)
 def preprocessar(texto):
-    doc = nlp(texto.lower())
-    tokens = [token.lemma_ for token in doc if not token.is_stop and not token.is_punct]
-    return " ".join(tokens)
+    texto = texto.lower()
+    texto = re.sub(r"[^\w\s]", "", texto)  # remove pontuação
+    return texto
 
 # Verifica existência da coluna 'trecho' e cria 'trecho_processado'
 if "trecho" in df.columns:
