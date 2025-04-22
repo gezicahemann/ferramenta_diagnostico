@@ -4,79 +4,104 @@ import spacy
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Carrega modelo leve do spaCy para português
-nlp = spacy.blank("pt")
+# Carregar modelo do spaCy
+nlp = spacy.load("pt_core_news_sm")
 
 # Função de pré-processamento
 def preprocessar(texto):
     doc = nlp(texto.lower())
-    tokens = [token.text for token in doc if not token.is_punct and not token.is_space]
+    tokens = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
     return " ".join(tokens)
 
-# Carrega base de dados
+# Carregar a base
 df = pd.read_csv("base_normas_com_recomendacoes_consultas.csv")
 
-# Preprocessa os trechos
+# Processar os trechos
 df["trecho_processado"] = df["trecho"].astype(str).apply(preprocessar)
 
-# Remove linhas vazias após o processamento
-df = df[df["trecho_processado"].str.strip().astype(bool)]
+# Remover linhas vazias
+df = df[df["trecho_processado"].str.strip() != ""]
 
-# Verifica se a base está válida
-if df.empty:
-    st.error("A base de dados está vazia após o pré-processamento. Verifique se há textos válidos na coluna 'trecho'.")
-    st.stop()
-
-# Cria matriz TF-IDF
+# Vetorização
 vetorizador = TfidfVectorizer()
 matriz_tfidf = vetorizador.fit_transform(df["trecho_processado"])
 
-# Função de busca
-def buscar_normas(consulta, top_n=5):
-    consulta_processada = preprocessar(consulta)
-    vetor_consulta = vetorizador.transform([consulta_processada])
-    similaridades = cosine_similarity(vetor_consulta, matriz_tfidf).flatten()
-    indices_top = similaridades.argsort()[-top_n:][::-1]
-    return df.iloc[indices_top][["manifestacao", "norma", "secao", "trecho", "recomendacoes", "consultas_relacionadas"]]
+# Estilo da página
+st.set_page_config(page_title="Diagnóstico por Manifestação Patológica", layout="centered")
 
-# Estilização da interface
-st.set_page_config(page_title="Diagnóstico Patológico", layout="centered", page_icon="🧱")
-
-# Interface escura customizada
 st.markdown("""
     <style>
         body {
-            background-color: #111;
-            color: #f1f1f1;
+            background-color: #111111;
+            color: #f0f0f0;
         }
-        .stTextInput label {
-            color: #f1f1f1;
+        .stTextInput>div>div>input {
+            background-color: #222;
+            color: white;
         }
-        .reportview-container .main .block-container {
-            padding-top: 2rem;
+        .stTextInput>label {
+            color: #dddddd !important;
+        }
+        .titulo-principal {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: white;
+            text-align: center;
+        }
+        .subtitulo {
+            font-size: 1.1em;
+            color: #cccccc;
+            text-align: center;
+        }
+        .rodape {
+            text-align: center;
+            font-size: 0.9em;
+            color: #888888;
+            margin-top: 2rem;
+        }
+        .logo-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: -30px;
+        }
+        .logo-container img {
+            width: 80px;
         }
     </style>
 """, unsafe_allow_html=True)
 
-# Logo e título centralizados
-col1, col2, col3 = st.columns([1, 1, 1])
-with col2:
-    st.image("logo_engenharia.png", width=80)
+# Logo centralizada
+st.markdown('<div class="logo-container"><img src="logo_engenharia.png" /></div>', unsafe_allow_html=True)
 
-st.markdown("<h1 style='text-align: center;'>🧱 Diagnóstico por Manifestação Patológica</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center;'>Digite abaixo a manifestação observada (ex: fissura em viga, infiltração na parede, manchas em fachada...)</p>", unsafe_allow_html=True)
+# Título e subtítulo
+st.markdown('<div class="titulo-principal">🔧 Diagnóstico por Manifestação Patológica</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitulo">Digite abaixo a manifestação observada (ex: fissura em viga, infiltração na parede, manchas em fachada...)</div>', unsafe_allow_html=True)
 
-# Campo de entrada
+# Entrada do usuário
 entrada = st.text_input("Descreva o problema:")
 
-# Busca e exibição dos resultados
+def buscar_normas(consulta):
+    consulta_proc = preprocessar(consulta)
+    if not consulta_proc.strip():
+        return pd.DataFrame()
+
+    consulta_vec = vetorizador.transform([consulta_proc])
+    similaridades = cosine_similarity(consulta_vec, matriz_tfidf).flatten()
+    
+    top_indices = similaridades.argsort()[::-1]
+    top_resultados = df.iloc[top_indices]
+    top_resultados = top_resultados[["manifestacao", "norma", "secao", "trecho", "recomendacoes", "consultas_relacionadas"]]
+    top_resultados = top_resultados[similaridades[top_indices] > 0.1]  # Limite de relevância
+
+    return top_resultados
+
 if entrada:
     resultados = buscar_normas(entrada)
-    if resultados.empty:
-        st.warning("Nenhuma correspondência encontrada.")
-    else:
+    if not resultados.empty:
         st.success("Resultados encontrados:")
-        st.dataframe(resultados, use_container_width=True)
+        st.dataframe(resultados)
+    else:
+        st.warning("Nenhum resultado encontrado para essa manifestação.")
 
 # Rodapé
-st.markdown("<p style='text-align: center; margin-top: 2rem;'>Desenvolvido por Gézica Hemann | Engenharia Civil</p>", unsafe_allow_html=True)
+st.markdown('<div class="rodape">Desenvolvido por Gézica Hemann | Engenharia Civil</div>', unsafe_allow_html=True)
