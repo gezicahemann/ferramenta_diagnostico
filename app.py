@@ -1,46 +1,27 @@
 import streamlit as st
 import pandas as pd
-import re
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from sentence_transformers import SentenceTransformer, util
+
+# Carrega o modelo de embeddings semânticos
+modelo = SentenceTransformer("all-MiniLM-L6-v2")
 
 # Lê a base de normas
 df = pd.read_csv("base_normas_com_recomendacoes_consultas.csv")
 
-# Função de pré-processamento (sem spaCy)
-def preprocessar(texto):
-    texto = texto.lower()
-    texto = re.sub(r"[^\w\s]", "", texto)  # remove pontuação
-    return texto
+# Gera embeddings dos trechos normativos
+df["embedding"] = df["trecho"].apply(lambda x: modelo.encode(str(x), convert_to_tensor=True))
 
-# Verifica existência da coluna 'trecho' e cria 'trecho_processado'
-if "trecho" in df.columns:
-    df["trecho_processado"] = df["trecho"].fillna("").apply(preprocessar)
-else:
-    st.error("Coluna 'trecho' não encontrada no arquivo CSV.")
-    st.stop()
-
-# Verifica se há conteúdo útil em 'trecho_processado'
-if df["trecho_processado"].isnull().all() or df["trecho_processado"].str.strip().eq("").all():
-    st.error("Todos os trechos processados estão vazios. Verifique os dados da coluna 'trecho'.")
-    st.stop()
-
-# Vetoriza os textos
-vetorizador = TfidfVectorizer()
-matriz_tfidf = vetorizador.fit_transform(df["trecho_processado"])
-
-# Função para buscar normas mais relevantes
+# Função de busca baseada em similaridade semântica
 def buscar_normas(consulta, top_n=3):
-    consulta_proc = preprocessar(consulta)
-    consulta_vec = vetorizador.transform([consulta_proc])
-    similaridade = cosine_similarity(consulta_vec, matriz_tfidf).flatten()
-    indices = similaridade.argsort()[-top_n:][::-1]
-    return df.iloc[indices][[
-        "manifestacao", "norma", "trecho", "secao",
+    consulta_emb = modelo.encode(consulta, convert_to_tensor=True)
+    df["similaridade"] = df["embedding"].apply(lambda emb: util.cos_sim(consulta_emb, emb).item())
+    resultados = df.sort_values(by="similaridade", ascending=False).head(top_n)
+    return resultados[[
+        "manifestacao", "norma", "secao", "trecho",
         "recomendacoes", "consultas_relacionadas"
     ]]
 
-# Interface no Streamlit
+# Interface do Streamlit
 st.set_page_config(page_title="Diagnóstico Patológico", layout="centered")
 st.title("🧠 Diagnóstico por Manifestação Patológica")
 st.markdown("Digite abaixo a manifestação observada (ex: fissura em viga, infiltração na parede, manchas em fachada...)")
