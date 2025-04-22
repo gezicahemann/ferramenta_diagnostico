@@ -8,7 +8,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 nlp = spacy.blank("pt")
 
 # Lê a base de normas
-df = pd.read_csv("base_normas_streamlit.csv")
+df = pd.read_csv("base_normas_com_recomendacoes_consultas.csv")
 
 # Pré-processamento dos textos
 def preprocessar(texto):
@@ -29,7 +29,7 @@ def buscar_normas(consulta, top_n=3):
     consulta_vec = vetorizador.transform([consulta_proc])
     similaridade = cosine_similarity(consulta_vec, matriz_tfidf).flatten()
     indices = similaridade.argsort()[-top_n:][::-1]
-    return df.iloc[indices][["manifestacao", "norma", "trecho", "secao", "recomendacao", "consultar"]]
+    return df.iloc[indices][["manifestacao", "norma", "trecho", "secao", "recomendacoes", "consultas_relacionadas"]]
 
 # Interface do Streamlit
 st.set_page_config(page_title="Diagnóstico Patológico", layout="centered")
@@ -42,9 +42,11 @@ if entrada:
     resultados = buscar_normas(entrada)
     st.subheader("🔍 Resultados encontrados:")
     for _, linha in resultados.iterrows():
+        st.markdown(f"---")
         st.markdown(f"**Manifestação:** {linha['manifestacao'].capitalize()}")
         st.markdown(f"**Norma:** {linha['norma']} (Seção {linha['secao']})")
         st.markdown(f"**Trecho técnico:** {linha['trecho']}")
-        st.markdown(f"**Recomendações adicionais:** {linha['recomendacao']}")
-        st.markdown(f"**Sugestões de consulta:** {linha['consultar']}")
-        st.markdown("---")
+        if pd.notna(linha['recomendacoes']):
+            st.markdown(f"**🔎 Recomendações de verificação:** {linha['recomendacoes']}")
+        if pd.notna(linha['consultas_relacionadas']):
+            st.markdown(f"**📚 Sugestões de consulta:** {linha['consultas_relacionadas']}")
