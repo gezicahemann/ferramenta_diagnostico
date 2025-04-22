@@ -5,8 +5,9 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # Carrega o modelo spaCy em português
-model_name = "pt_core_news_sm"
-nlp = spacy.load(model_name)
+import spacy
+
+nlp = spacy.blank("pt")
 
 # Lê a base de normas com recomendações
 df = pd.read_csv("base_normas_com_recomendacoes_consultas.csv")
