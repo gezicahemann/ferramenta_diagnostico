@@ -5,7 +5,14 @@ from sklearn.metrics.pairwise import cosine_similarity
 import spacy
 
 # Carrega o modelo de linguagem em português do spaCy
-nlp = spacy.load("pt_core_news_sm")
+import subprocess
+import importlib.util
+
+model_name = "pt_core_news_sm"
+if importlib.util.find_spec(model_name) is None:
+    subprocess.run(["python", "-m", "spacy", "download", model_name])
+
+nlp = spacy.load(model_name)
 
 # Lê a base de normas
 df = pd.read_csv("base_normas_streamlit.csv")
