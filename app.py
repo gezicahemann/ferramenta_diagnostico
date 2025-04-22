@@ -1,88 +1,82 @@
-import streamlit as st
 import pandas as pd
-import spacy
+import streamlit as st
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import spacy
+from spacy.lang.pt import Portuguese
 
-# Carrega modelo spaCy
-nlp = spacy.load("pt_core_news_sm")
+# Inicializa NLP leve para tokenização
+nlp = Portuguese()
 
-# Lê a base de dados
-df = pd.read_csv("base_normas_com_recomendacoes_consultas.csv")
-
-# Pré-processamento com spaCy
+# Função de pré-processamento
 def preprocessar(texto):
     doc = nlp(texto.lower())
-    tokens = [token.lemma_ for token in doc if not token.is_stop and not token.is_punct]
+    tokens = [token.text for token in doc if not token.is_stop and not token.is_punct]
     return " ".join(tokens)
 
-df["trecho_processado"] = df["trecho"].astype(str).apply(preprocessar)
+# Carrega base de dados
+df = pd.read_csv("base_normas_com_recomendacoes_consultas.csv")
+df["trecho_processado"] = df["trecho"].fillna("").apply(preprocessar)
 
-# Vetorização
+# Vetoriza os trechos
 vetorizador = TfidfVectorizer()
 matriz_tfidf = vetorizador.fit_transform(df["trecho_processado"])
 
-# Busca por similaridade
+# Função de busca
 def buscar_normas(consulta, top_n=3):
     consulta_proc = preprocessar(consulta)
     consulta_vec = vetorizador.transform([consulta_proc])
     similaridade = cosine_similarity(consulta_vec, matriz_tfidf).flatten()
     indices = similaridade.argsort()[-top_n:][::-1]
-    return df.iloc[indices][["manifestacao", "norma", "trecho", "verificacao"]]
+    return df.iloc[indices][["manifestacao", "norma", "trecho", "recomendacao"]]
 
-# CONFIGURAÇÃO VISUAL
-st.set_page_config(
-    page_title="Diagnóstico Patológico",
-    layout="centered",
-    initial_sidebar_state="auto"
+# Layout visual
+st.set_page_config(page_title="Diagnóstico Patológico", layout="centered")
+
+# Estilo com fundo escuro
+st.markdown(
+    """
+    <style>
+    body {
+        background-color: #121212;
+        color: #f0f0f0;
+    }
+    .stApp {
+        background-color: #121212;
+    }
+    .title {
+        text-align: center;
+        color: #e0e0e0;
+        font-size: 2.3em;
+        font-weight: bold;
+    }
+    .subtitle {
+        text-align: center;
+        color: #aaa;
+        font-size: 1.1em;
+    }
+    .footer {
+        margin-top: 2em;
+        text-align: center;
+        font-size: 0.9em;
+        color: #999;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
-# Estilo com modo escuro e tipografia
-st.markdown("""
-    <style>
-        body {
-            background-color: #111;
-            color: #f0f0f0;
-        }
-        .stApp {
-            background-color: #111;
-            color: #f0f0f0;
-            font-family: 'Segoe UI', sans-serif;
-        }
-        .title-style {
-            font-size: 36px;
-            font-weight: 700;
-            text-align: center;
-            color: #f0f0f0;
-            margin-bottom: 10px;
-        }
-        .sub-style {
-            text-align: center;
-            font-size: 16px;
-            color: #aaa;
-            margin-bottom: 30px;
-        }
-        .footer {
-            text-align: center;
-            font-size: 14px;
-            margin-top: 40px;
-            color: #666;
-        }
-        .stTextInput > div > div > input {
-            background-color: #222;
-            color: white;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
-# Logo ajustada
+# Logo
 st.image("logo_engenharia.png", width=100)
 
-# Título
-st.markdown('<div class="title-style">🧱 Diagnóstico por Manifestação Patológica</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-style">Digite abaixo a manifestação observada (ex: fissura em viga, infiltração na parede, manchas em fachada...)</div>', unsafe_allow_html=True)
+# Título e instruções
+st.markdown("<div class='title'>🔍 Diagnóstico por Manifestação Patológica</div>", unsafe_allow_html=True)
+st.markdown(
+    "<div class='subtitle'>Digite abaixo a manifestação observada (ex: fissura em viga, infiltração na parede, manchas em fachada...)</div>",
+    unsafe_allow_html=True,
+)
 
-# Entrada do usuário
+# Campo de entrada
 entrada = st.text_input("Descreva o problema:")
 
 # Resultado
@@ -93,8 +87,8 @@ if entrada:
         st.markdown(f"**Manifestação:** {linha['manifestacao']}")
         st.markdown(f"**Norma:** {linha['norma']}")
         st.markdown(f"**Trecho técnico:** {linha['trecho']}")
-        st.markdown(f"**Recomendações de verificação:** {linha['verificacao']}")
+        st.markdown(f"**Recomendações:** {linha['recomendacao']}")
         st.markdown("---")
 
-# Rodapé com nome
-st.markdown('<div class="footer">Desenvolvido por Gézica Hemann | Engenharia Civil</div>', unsafe_allow_html=True)
+# Rodapé com seu nome
+st.markdown("<div class='footer'>Desenvolvido por Gézica Hemann | Engenharia Civil</div>", unsafe_allow_html=True)
