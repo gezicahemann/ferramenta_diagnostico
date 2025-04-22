@@ -42,4 +42,4 @@ entrada = st.text_input("Descreva o problema:")
 if entrada:
     resultados = buscar_normas(entrada)
     st.subheader("🔍 Resultados encontrados:")
-    for _,_
+   for _, linha in resultados.iterrows():
