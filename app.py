@@ -6,7 +6,7 @@ from sentence_transformers import SentenceTransformer, util
 modelo = SentenceTransformer("all-MiniLM-L6-v2")
 
 # Lê a base de normas
-df = pd.read_csv("base_normas_streamlit.csv")
+df = pd.read_csv("base_normas_com_recomendacoes_consultas.csv")
 
 # Gera os embeddings dos trechos da base
 df["embedding"] = df["trecho"].apply(lambda x: modelo.encode(x, convert_to_tensor=True))
@@ -17,7 +17,7 @@ def buscar_normas(consulta, top_n=3):
     similares = [util.cos_sim(consulta_embedding, emb).item() for emb in df["embedding"]]
     df["similaridade"] = similares
     resultados = df.sort_values(by="similaridade", ascending=False).head(top_n)
-    return resultados[["manifestacao", "norma", "trecho", "secao"]]
+    return resultados[["manifestacao", "norma", "trecho", "secao", "recomendacoes", "consultas_relacionadas"]]
 
 # Interface no Streamlit
 st.set_page_config(page_title="Diagnóstico Patológico", layout="centered")
@@ -30,7 +30,9 @@ if entrada:
     resultados = buscar_normas(entrada)
     st.subheader("🔍 Resultados encontrados:")
     for _, linha in resultados.iterrows():
-        st.markdown(f"**Manifestação:** {linha['manifestacao'].capitalize()}")
-        st.markdown(f"**Norma:** {linha['norma']} (Seção {linha['secao']})")
-        st.markdown(f"**Trecho técnico:** {linha['trecho']}")
+        st.markdown(f"### 📌 Manifestação: {linha['manifestacao'].capitalize()}")
+        st.markdown(f"**📘 Norma:** {linha['norma']} (Seção {linha['secao']})")
+        st.markdown(f"**📝 Trecho técnico:** {linha['trecho']}")
+        st.markdown(f"**🔎 Deve-se observar:**\n{linha['recomendacoes']}")
+        st.markdown(f"**📚 Consultas técnicas recomendadas:**\n{linha['consultas_relacionadas']}")
         st.markdown("---")
