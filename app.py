@@ -1,30 +1,25 @@
 import streamlit as st
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from sentence_transformers import SentenceTransformer, util
+
+# Carrega o modelo de linguagem leve com embeddings
+modelo = SentenceTransformer("all-MiniLM-L6-v2")
 
 # Lê a base de normas
 df = pd.read_csv("base_normas_streamlit.csv")
 
-# Pré-processa os textos das normas
-def preprocessar(texto):
-    return texto.lower()
+# Gera os embeddings dos trechos da base
+df["embedding"] = df["trecho"].apply(lambda x: modelo.encode(x, convert_to_tensor=True))
 
-df["trecho_processado"] = df["trecho"].apply(preprocessar)
-
-# Vetoriza os trechos usando TF-IDF
-vetorizador = TfidfVectorizer()
-matriz_tfidf = vetorizador.fit_transform(df["trecho_processado"])
-
-# Função de busca dos trechos mais semelhantes
+# Função para buscar os trechos mais semelhantes semanticamente
 def buscar_normas(consulta, top_n=3):
-    consulta_proc = preprocessar(consulta)
-    consulta_vec = vetorizador.transform([consulta_proc])
-    similaridade = cosine_similarity(consulta_vec, matriz_tfidf).flatten()
-    indices = similaridade.argsort()[-top_n:][::-1]
-    return df.iloc[indices][["manifestacao", "norma", "trecho", "secao"]]
+    consulta_embedding = modelo.encode(consulta, convert_to_tensor=True)
+    similares = [util.cos_sim(consulta_embedding, emb).item() for emb in df["embedding"]]
+    df["similaridade"] = similares
+    resultados = df.sort_values(by="similaridade", ascending=False).head(top_n)
+    return resultados[["manifestacao", "norma", "trecho", "secao"]]
 
-# Interface com o usuário no Streamlit
+# Interface no Streamlit
 st.set_page_config(page_title="Diagnóstico Patológico", layout="centered")
 st.title("🧱 Diagnóstico por Manifestação Patológica")
 st.markdown("Digite abaixo a manifestação observada (ex: fissura em viga, infiltração na parede, manchas em fachada...)")
