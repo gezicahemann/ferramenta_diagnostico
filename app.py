@@ -1,25 +1,51 @@
 import streamlit as st
 import pandas as pd
+import spacy
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Estilo escuro com contraste agradável
+# Carrega modelo spaCy
+nlp = spacy.load("pt_core_news_sm")
+
+# Lê a base de dados
+df = pd.read_csv("base_normas_com_recomendacoes_consultas.csv")
+
+# Pré-processamento com spaCy
+def preprocessar(texto):
+    doc = nlp(texto.lower())
+    tokens = [token.lemma_ for token in doc if not token.is_stop and not token.is_punct]
+    return " ".join(tokens)
+
+df["trecho_processado"] = df["trecho"].astype(str).apply(preprocessar)
+
+# Vetorização
+vetorizador = TfidfVectorizer()
+matriz_tfidf = vetorizador.fit_transform(df["trecho_processado"])
+
+# Busca por similaridade
+def buscar_normas(consulta, top_n=3):
+    consulta_proc = preprocessar(consulta)
+    consulta_vec = vetorizador.transform([consulta_proc])
+    similaridade = cosine_similarity(consulta_vec, matriz_tfidf).flatten()
+    indices = similaridade.argsort()[-top_n:][::-1]
+    return df.iloc[indices][["manifestacao", "norma", "trecho", "verificacao"]]
+
+# CONFIGURAÇÃO VISUAL
 st.set_page_config(
     page_title="Diagnóstico Patológico",
     layout="centered",
     initial_sidebar_state="auto"
 )
 
-# Aplica CSS para fundo escuro e letras mais visíveis
-st.markdown(
-    """
+# Estilo com modo escuro e tipografia
+st.markdown("""
     <style>
         body {
-            background-color: #111111;
+            background-color: #111;
             color: #f0f0f0;
         }
         .stApp {
-            background-color: #111111;
+            background-color: #111;
             color: #f0f0f0;
             font-family: 'Segoe UI', sans-serif;
         }
@@ -33,7 +59,8 @@ st.markdown(
         .sub-style {
             text-align: center;
             font-size: 16px;
-            color: #999;
+            color: #aaa;
+            margin-bottom: 30px;
         }
         .footer {
             text-align: center;
@@ -41,64 +68,33 @@ st.markdown(
             margin-top: 40px;
             color: #666;
         }
-        .logo {
-            display: block;
-            margin-left: auto;
-            margin-right: auto;
-            width: 100px;
+        .stTextInput > div > div > input {
+            background-color: #222;
+            color: white;
         }
     </style>
-    """,
-    unsafe_allow_html=True
-)
+""", unsafe_allow_html=True)
 
-# Exibe logo
-st.image("logo_engenharia.png", use_column_width=False, width=80)
+# Logo ajustada
+st.image("logo_engenharia.png", width=100)
 
-# Título e instrução
-st.markdown('<div class="title-style">🔎 Diagnóstico por Manifestação Patológica</div>', unsafe_allow_html=True)
-st.markdown(
-    '<div class="sub-style">Digite abaixo a manifestação observada (ex: fissura em viga, infiltração na parede, manchas em fachada...)</div>',
-    unsafe_allow_html=True
-)
+# Título
+st.markdown('<div class="title-style">🧱 Diagnóstico por Manifestação Patológica</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-style">Digite abaixo a manifestação observada (ex: fissura em viga, infiltração na parede, manchas em fachada...)</div>', unsafe_allow_html=True)
 
-# Carrega base de dados
-df = pd.read_csv("base_normas_com_recomendacoes_consultas.csv")
+# Entrada do usuário
+entrada = st.text_input("Descreva o problema:")
 
-# Pré-processamento
-def preprocessar(texto):
-    return texto.lower().strip()
+# Resultado
+if entrada:
+    resultados = buscar_normas(entrada)
+    st.subheader("🔎 Resultados encontrados:")
+    for _, linha in resultados.iterrows():
+        st.markdown(f"**Manifestação:** {linha['manifestacao']}")
+        st.markdown(f"**Norma:** {linha['norma']}")
+        st.markdown(f"**Trecho técnico:** {linha['trecho']}")
+        st.markdown(f"**Recomendações de verificação:** {linha['verificacao']}")
+        st.markdown("---")
 
-df["trecho_processado"] = df["trecho"].astype(str).apply(preprocessar)
-
-# Verifica se há dados para processar
-if df["trecho_processado"].isnull().all() or df["trecho_processado"].str.strip().eq("").all():
-    st.error("Erro: Base de dados não possui trechos válidos para análise.")
-else:
-    # Vetorização
-    vetorizador = TfidfVectorizer()
-    matriz_tfidf = vetorizador.fit_transform(df["trecho_processado"])
-
-    # Busca inteligente
-    def buscar_normas(consulta, top_n=3):
-        consulta_proc = preprocessar(consulta)
-        consulta_vec = vetorizador.transform([consulta_proc])
-        similaridade = cosine_similarity(consulta_vec, matriz_tfidf).flatten()
-        indices = similaridade.argsort()[-top_n:][::-1]
-        return df.iloc[indices][["manifestacao", "norma", "trecho", "secao", "recomendacao"]]
-
-    entrada = st.text_input("Descreva o problema:")
-
-    if entrada:
-        resultados = buscar_normas(entrada)
-        st.subheader("📄 Resultados encontrados:")
-
-        for _, linha in resultados.iterrows():
-            st.markdown(f"**Manifestação:** {linha['manifestacao']}")
-            st.markdown(f"**Norma:** {linha['norma']} (Seção {linha['secao']})")
-            st.markdown(f"**Trecho técnico:** {linha['trecho']}")
-            st.markdown(f"**Recomendações de verificação:** {linha['recomendacao']}")
-            st.markdown("---")
-
-# Rodapé
+# Rodapé com nome
 st.markdown('<div class="footer">Desenvolvido por Gézica Hemann | Engenharia Civil</div>', unsafe_allow_html=True)
